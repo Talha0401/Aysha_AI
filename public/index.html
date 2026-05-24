@@ -15,18 +15,10 @@
   --text:#f5e6ee;--text2:#c9a8bd;--text3:#8a6a7a;
   --bubble-her:#2c1a2e;--bubble-me:#4a1a35;
 }
-body{font-family:'Hind Siliguri',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+body{font-family:'Hind Siliguri',sans-serif;background:var(--bg);color:var(--text);height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;}
+#input-area{position:sticky;bottom:0;z-index:20;}
 
-/* SETUP */
-#setup-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:100;padding:2rem;}
-.setup-card{background:var(--bg2);border:1px solid var(--border2);border-radius:20px;padding:2.5rem;width:100%;max-width:420px;text-align:center;}
-.setup-title{font-family:'Galada',cursive;font-size:2.8rem;color:var(--pink);margin-bottom:.5rem;letter-spacing:2px;}
-.setup-subtitle{color:var(--text2);font-size:.9rem;margin-bottom:2rem;}
-.setup-card label{display:block;text-align:left;font-size:.85rem;color:var(--text2);margin-bottom:.4rem;margin-top:1.2rem;}
-.setup-card input{width:100%;padding:.75rem 1rem;background:var(--bg3);border:1px solid var(--border2);border-radius:12px;color:var(--text);font-size:.9rem;font-family:'Hind Siliguri',sans-serif;outline:none;transition:border-color .2s;}
-.setup-card input:focus{border-color:var(--pink);}
-.setup-btn{margin-top:1.8rem;width:100%;padding:.85rem;background:linear-gradient(135deg,var(--pink3),var(--purple));border:none;border-radius:12px;color:white;font-size:1rem;font-family:'Hind Siliguri',sans-serif;font-weight:600;cursor:pointer;transition:opacity .2s,transform .1s;}
-.setup-btn:hover{opacity:.9;}.setup-btn:active{transform:scale(.98);}
+
 
 /* HEADER */
 #header{display:flex;align-items:center;gap:12px;padding:14px 20px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;position:relative;z-index:10;}
@@ -130,7 +122,15 @@ body{font-family:'Hind Siliguri',sans-serif;background:var(--bg);color:var(--tex
 .vb-mute,.vb-cam{background:var(--surface2);color:var(--text);}
 .vb-end{background:#e24b4a;color:white;}
 
-/* CONFIRM */
+/* MODE TOGGLE */
+.mode-toggle{display:flex;align-items:center;background:var(--surface);border-radius:20px;padding:3px;gap:2px;margin-right:4px;}
+.mode-btn{padding:5px 10px;border-radius:16px;border:none;font-size:.7rem;cursor:pointer;font-family:'Hind Siliguri',sans-serif;transition:all .2s;color:var(--text3);background:transparent;}
+.mode-btn.active{background:linear-gradient(135deg,var(--pink3),var(--purple));color:white;}
+.mode-btn.research-active{background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;}
+.mode-indicator{font-size:.7rem;color:var(--text3);padding:2px 8px;border-radius:8px;background:var(--surface);}
+#input-area.research-mode #msg-input{border-color:rgba(59,130,246,.4);}
+#input-area.research-mode #msg-input:focus{border-color:#3b82f6;}
+#input-area.research-mode #send-btn{background:linear-gradient(135deg,#3b82f6,#8b5cf6);}
 .confirm-toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--border2);border-radius:14px;padding:12px 20px;display:flex;gap:10px;align-items:center;font-size:.85rem;color:var(--text2);z-index:50;animation:fadeUp .2s ease;}
 .confirm-toast button{padding:5px 12px;border-radius:8px;border:none;cursor:pointer;font-size:.82rem;font-family:'Hind Siliguri',sans-serif;}
 .cy{background:#e24b4a;color:white;}.cn{background:var(--surface);color:var(--text2);}
@@ -142,16 +142,7 @@ body{font-family:'Hind Siliguri',sans-serif;background:var(--bg);color:var(--tex
 </head>
 <body>
 
-<!-- Setup -->
-<div id="setup-screen">
-  <div class="setup-card">
-    <div class="setup-title">Aysha 💕</div>
-    <p class="setup-subtitle">তোমার নাম দাও, শুরু হোক 🌸</p>
-    <label>তোমার নাম (Aysha তোমাকে কী বলে ডাকবে?)</label>
-    <input type="text" id="your-name-input" placeholder="যেমন: Talha, Jaan..."/>
-    <button class="setup-btn" onclick="startApp()">💕 শুরু করি</button>
-  </div>
-</div>
+
 
 <!-- Header -->
 <div id="header">
@@ -160,7 +151,11 @@ body{font-family:'Hind Siliguri',sans-serif;background:var(--bg);color:var(--tex
     <h1>Aysha</h1>
     <p id="status-text">online</p>
   </div>
-  <div class="header-right">
+  <div class="header-right" style="display:flex;align-items:center;gap:6px;">
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="btn-love" onclick="setMode('love')">💕</button>
+      <button class="mode-btn" id="btn-research" onclick="setMode('research')">🔍</button>
+    </div>
     <button class="dots-btn" onclick="toggleSB()">
       <span></span><span></span><span></span>
     </button>
@@ -237,21 +232,40 @@ body{font-family:'Hind Siliguri',sans-serif;background:var(--bg);color:var(--tex
 </div>
 
 <script>
-const STORAGE_KEY='aysha_chat_v2',MEM_KEY='aysha_mem_v2',NK='aysha_name_v2';
-let yourName='Jaan',chatHistory=[],memory=[],isTyping=false,callTimer=null,callSecs=0,muted=false,camOff=false;
+const STORAGE_KEY='aysha_chat_v2',MEM_KEY='aysha_mem_v2';
+const PETNAMES=['Baby','Babe','Jaan'];
+function petName(){return PETNAMES[Math.floor(Math.random()*PETNAMES.length)];}
+const yourName='Talha';
+let chatHistory=[],memory=[],isTyping=false,callTimer=null,callSecs=0,muted=false,camOff=false,currentMode='love';
 
-function startApp(){
-  const n=document.getElementById('your-name-input').value.trim();
-  yourName=n||'Jaan';
-  localStorage.setItem(NK,yourName);
-  document.getElementById('setup-screen').classList.add('hidden');
-  loadData();
-  if(chatHistory.length===0) setTimeout(()=>addHer('Baby! 🌸 কেমন আছো? অনেক miss করছিলাম 💕'),800);
+function setMode(m){
+  currentMode=m;
+  document.getElementById('btn-love').classList.toggle('active', m==='love');
+  document.getElementById('btn-research').classList.toggle('research-active', m==='research');
+  document.getElementById('btn-research').classList.toggle('active', false);
+  document.getElementById('input-area').classList.toggle('research-mode', m==='research');
+  const ph=document.getElementById('msg-input');
+  ph.placeholder = m==='love' ? 'কিছু লিখো...' : 'কিছু জানতে চাও? Research করো...';
+  document.getElementById('status-text').textContent = m==='love' ? 'online' : '🔍 research mode';
 }
 
-function loadData(){
+function init(){
+  loadData();
+  if(chatHistory.length===0) setTimeout(()=>addHer(`${petName()}! 🌸 কেমন আছো? অনেক miss করছিলাম 💕`),800);
+}
+
+async function loadData(){
   try{chatHistory=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');}catch(e){chatHistory=[];}
   try{memory=JSON.parse(localStorage.getItem(MEM_KEY)||'[]');}catch(e){memory=[];}
+  // Try to load from server KV
+  try{
+    const res=await fetch('/api/history');
+    if(res.ok){
+      const d=await res.json();
+      if(d.history&&d.history.length>0){chatHistory=d.history;localStorage.setItem(STORAGE_KEY,JSON.stringify(chatHistory));}
+      if(d.memory&&d.memory.length>0){memory=d.memory;localStorage.setItem(MEM_KEY,JSON.stringify(memory));}
+    }
+  }catch(e){}
   renderMsgs(); renderMem();
 }
 function saveChat(){localStorage.setItem(STORAGE_KEY,JSON.stringify(chatHistory));}
@@ -324,7 +338,7 @@ async function sendMessage(){
     const res=await fetch('/api/chat',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({messages:msgs,memoryText:memTxt,yourName})
+      body:JSON.stringify({messages:msgs,memoryText:memTxt,yourName,newMessage:text,saveHistory:true,mode:currentMode})
     });
     const data=await res.json();
     hideTyping();
@@ -400,16 +414,13 @@ function clearChat(){
   chatHistory=[];localStorage.removeItem(STORAGE_KEY);
   document.getElementById('chat-area').innerHTML='';
   hideConfirm();
-  setTimeout(()=>addHer('Baby! নতুন করে শুরু করলাম 🌸 কেমন আছো?'),500);
+  setTimeout(()=>addHer(`${petName()}! নতুন করে শুরু করলাম 🌸 কেমন আছো?`),500);
 }
 
 document.getElementById('msg-input').addEventListener('input',function(){this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px';});
 document.getElementById('msg-input').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}});
 
-window.addEventListener('load',()=>{
-  const n=localStorage.getItem(NK);
-  if(n){yourName=n;document.getElementById('setup-screen').classList.add('hidden');loadData();if(chatHistory.length===0)setTimeout(()=>addHer('Baby! 🌸 কেমন আছো? অনেক miss করছিলাম 💕'),800);}
-});
+window.addEventListener('load',()=>{ init(); });
 </script>
 </body>
 </html>
