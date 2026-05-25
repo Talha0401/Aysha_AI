@@ -1,5 +1,53 @@
 const https = require('https');
 
+// ── Key rotation ──
+function getKeys() {
+  const keys = [];
+  for (let i = 1; i <= 5; i++) {
+    const k = process.env[`GEMINI_KEY_${i}`];
+    if (k) keys.push(k);
+  }
+  if (keys.length === 0 && process.env.GEMINI_API_KEY) keys.push(process.env.GEMINI_API_KEY);
+  return keys;
+}
+
+function geminiRequest(apiKey, payload) {
+  return new Promise((resolve, reject) => {
+    const opts = {
+      hostname: 'generativelanguage.googleapis.com',
+      path: `/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+    };
+    const r = https.request(opts, (res) => {
+      let d = ''; res.on('data', c => d += c); res.on('end', () => resolve(d));
+    });
+    r.on('error', reject); r.write(payload); r.end();
+  });
+}
+
+async function geminiWithRotation(payload) {
+  const keys = getKeys();
+  if (keys.length === 0) throw new Error('No Gemini API keys configured!');
+  for (let i = 0; i < keys.length; i++) {
+    try {
+      const raw = await geminiRequest(keys[i], payload);
+      const data = JSON.parse(raw);
+      if (data.error && (data.error.code === 429 || data.error.status === 'RESOURCE_EXHAUSTED')) {
+        console.log(`Key ${i+1} quota exceeded, trying next...`);
+        continue;
+      }
+      if (data.error) throw new Error(data.error.message);
+      return data;
+    } catch(e) {
+      if (i === keys.length - 1) throw e;
+      console.log(`Key ${i+1} failed, trying next...`);
+    }
+  }
+  throw new Error('All API keys quota exceeded!');
+}
+
+// ── KV helpers ──
 function kvRequest(method, path, body) {
   return new Promise((resolve, reject) => {
     const url = new URL(process.env.KV_REST_API_URL + path);
@@ -34,15 +82,13 @@ async function kvSet(key, value) {
   await kvRequest('POST', `/set/${key}`, { value: JSON.stringify(value) });
 }
 
+// ── Main handler ──
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  const GEMINI_KEY = process.env.GEMINI_API_KEY;
-  if (!GEMINI_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY not set!' });
 
   const useKV = !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
 
@@ -51,7 +97,6 @@ module.exports = async function handler(req, res) {
     const name = yourName || 'Talha';
     const isResearch = mode === 'research';
 
-    // Load from KV if available
     let history = messages;
     let memory = memoryText;
     if (useKV) {
@@ -78,24 +123,9 @@ Important: ekoi kotha r ekoi answer na, protita reply alada koro.`;
       generationConfig: { temperature: 1.05, maxOutputTokens: 450 }
     });
 
-    const apiRes = await new Promise((resolve, reject) => {
-      const opts = {
-        hostname: 'generativelanguage.googleapis.com',
-        path: `/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
-      };
-      const r = https.request(opts, (res) => {
-        let d = ''; res.on('data', c => d += c); res.on('end', () => resolve(d));
-      });
-      r.on('error', reject); r.write(payload); r.end();
-    });
-
-    const data = JSON.parse(apiRes);
-    if (data.error) throw new Error(data.error.message);
+    const data = await geminiWithRotation(payload);
     const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'কিছু বুঝলাম না 🥺';
 
-    // Save updated history to KV
     if (useKV && saveHistory) {
       const currentHistory = (await kvGet('aysha_history')) || [];
       currentHistory.push({ role: 'user', content: newMessage, ts: Date.now() });
